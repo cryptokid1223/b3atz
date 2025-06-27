@@ -1065,32 +1065,18 @@ export default function MusicVisualizer({
         const source = audioContext.createBufferSource();
         source.buffer = audioBufferRef.current;
         
-        // Check if we're recording and need to use splitter
-        if (audioDestinationRef.current) {
-          // Use splitter pattern for recording
-          const splitter = audioContext.createGain();
-          source.connect(splitter);
-          splitter.connect(audioDestinationRef.current);
-          
-          const analyser = audioContext.createAnalyser();
-          analyser.fftSize = 256;
-          analyserRef.current = analyser;
-          splitter.connect(analyser);
-          analyser.connect(audioContext.destination);
-        } else {
-          // Normal playback without recording
-          const analyser = audioContext.createAnalyser();
-          analyser.fftSize = 256;
-          analyserRef.current = analyser;
-          
-          // Add a gain node for volume control (especially important for mobile)
-          const gainNode = audioContext.createGain();
-          gainNode.gain.value = 1.0; // Full volume
-          
-          source.connect(gainNode);
-          gainNode.connect(analyser);
-          analyser.connect(audioContext.destination);
-        }
+        // Normal playback - don't interfere with recording
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyserRef.current = analyser;
+        
+        // Add a gain node for volume control (especially important for mobile)
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 1.0; // Full volume
+        
+        source.connect(gainNode);
+        gainNode.connect(analyser);
+        analyser.connect(audioContext.destination);
         
         sourceRef.current = source;
         startTimeRef.current = audioContext.currentTime;
@@ -1232,15 +1218,9 @@ export default function MusicVisualizer({
 
   // Video recording functions
   const startRecording = () => {
-    if (!rendererRef.current || !mountRef.current || !audioContextRef.current) {
+    if (!rendererRef.current || !mountRef.current) {
       console.error('Cannot start recording: missing required components');
       return;
-    }
-    
-    // Check if audio is playing
-    if (!isPlaying) {
-      console.warn('Audio is not playing - recording will only capture video');
-      alert('Audio is not playing. The recording will only include video without audio.');
     }
     
     // Check if MediaRecorder is supported
@@ -1366,45 +1346,95 @@ export default function MusicVisualizer({
   };
 
   const startMobileRecording = async (canvas: HTMLCanvasElement) => {
-    // For mobile, we'll use a different approach that's more compatible
-    // We'll capture frames and audio separately, then combine them
-    
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-    
-    console.log(`Mobile recording: iOS=${isIOS}, Safari=${isSafari}`);
+    console.log('Starting mobile recording...');
     
     try {
-      if (isIOS && isSafari) {
-        // iOS Safari specific approach
-        await startIOSRecording(canvas);
-      } else {
-        // Android/other mobile browsers
-        await startAndroidRecording(canvas);
+      // For mobile, we'll use a simpler approach that doesn't interfere with audio
+      // We'll capture video only and let the user hear the audio normally
+      const videoStream = canvas.captureStream(30); // 30 FPS for mobile
+      
+      // Check for supported MIME types for mobile
+      const mimeTypes = [
+        'video/webm;codecs=vp8',
+        'video/webm',
+        'video/mp4'
+      ];
+      
+      let selectedMimeType = 'video/webm';
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          break;
+        }
       }
+      
+      console.log(`Using MIME type: ${selectedMimeType}`);
+      
+      // Create MediaRecorder with video only (no audio interference)
+      const mediaRecorder = new MediaRecorder(videoStream, {
+        mimeType: selectedMimeType,
+        videoBitsPerSecond: 4000000 // 4 Mbps for mobile
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+          console.log(`Recording chunk: ${event.data.size} bytes`);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        console.log('Mobile recording stopped, processing...');
+        const blob = new Blob(recordedChunksRef.current, { type: selectedMimeType });
+        console.log(`Recording blob size: ${blob.size} bytes`);
+        
+        if (blob.size > 0) {
+          saveToMobileGallery(blob, selectedMimeType);
+        } else {
+          console.error('Recording blob is empty');
+          alert('Recording failed - no video data was captured. Please try again.');
+        }
+      };
+      
+      mediaRecorder.onerror = (event) => {
+        console.error('Mobile MediaRecorder error:', event);
+        alert('Mobile recording failed. Please try again.');
+      };
+      
+      mediaRecorder.start(1000); // Collect data every second
+      console.log('Mobile recording started successfully (video only)');
+      
     } catch (error) {
       console.error('Mobile recording failed:', error);
-      alert('Mobile recording failed. Trying fallback method...');
-      // Fallback to manual frame capture
-      startManualFrameCapture(canvas);
+      
+      // Fallback: try screen recording if available
+      try {
+        await startScreenRecordingFallback(canvas);
+      } catch (fallbackError) {
+        console.error('Screen recording fallback also failed:', fallbackError);
+        alert('Recording is not supported on this mobile device. Please try on desktop.');
+      }
     }
   };
 
-  const startIOSRecording = async (canvas: HTMLCanvasElement) => {
-    try {
-      // For iOS Safari, we'll use a simpler approach with screen recording API if available
-      if ('mediaDevices' in navigator && 'getDisplayMedia' in navigator.mediaDevices) {
-        // Try to use screen recording API
+  const startScreenRecordingFallback = async (canvas: HTMLCanvasElement) => {
+    console.log('Trying screen recording fallback...');
+    
+    if ('mediaDevices' in navigator && 'getDisplayMedia' in navigator.mediaDevices) {
+      try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             width: { ideal: canvas.width },
             height: { ideal: canvas.height }
           },
-          audio: true
+          audio: false // Don't capture audio to avoid interference
         });
         
         const mediaRecorder = new MediaRecorder(stream, {
-          mimeType: 'video/mp4'
+          mimeType: 'video/webm'
         });
         
         mediaRecorderRef.current = mediaRecorder;
@@ -1417,101 +1447,23 @@ export default function MusicVisualizer({
         };
         
         mediaRecorder.onstop = () => {
-          const blob = new Blob(recordedChunksRef.current, { type: 'video/mp4' });
-          saveToMobileGallery(blob, 'video/mp4');
+          const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+          if (blob.size > 0) {
+            saveToMobileGallery(blob, 'video/webm');
+          } else {
+            alert('Screen recording failed - no video data captured.');
+          }
         };
         
-        mediaRecorder.start();
-        console.log('iOS screen recording started');
-      } else {
-        // Fallback: manual frame capture
-        startManualFrameCapture(canvas);
+        mediaRecorder.start(1000);
+        console.log('Screen recording fallback started');
+      } catch (error) {
+        console.error('Screen recording permission denied or failed:', error);
+        throw new Error('Screen recording not available');
       }
-    } catch (error) {
-      console.error('iOS recording failed:', error);
-      // Fallback to manual frame capture
-      startManualFrameCapture(canvas);
+    } else {
+      throw new Error('Screen recording not supported');
     }
-  };
-
-  const startAndroidRecording = async (canvas: HTMLCanvasElement) => {
-    try {
-      // For Android, try canvas capture stream first
-      const videoStream = canvas.captureStream(30); // Lower FPS for mobile
-      
-      // Create audio destination
-      const audioDestination = audioContextRef.current!.createMediaStreamDestination();
-      audioDestinationRef.current = audioDestination;
-      
-      // Connect audio if available
-      if (sourceRef.current) {
-        const splitter = audioContextRef.current!.createGain();
-        sourceRef.current.disconnect();
-        sourceRef.current.connect(splitter);
-        splitter.connect(audioDestination);
-        
-        const analyser = audioContextRef.current!.createAnalyser();
-        analyser.fftSize = 256;
-        analyserRef.current = analyser;
-        splitter.connect(analyser);
-        analyser.connect(audioContextRef.current!.destination);
-      }
-      
-      const combinedStream = new MediaStream([
-        ...videoStream.getVideoTracks(),
-        ...audioDestination.stream.getAudioTracks()
-      ]);
-      
-      const mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm'
-      });
-      
-      mediaRecorderRef.current = mediaRecorder;
-      recordedChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
-      
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-        saveToMobileGallery(blob, 'video/webm');
-      };
-      
-      mediaRecorder.start();
-      console.log('Android recording started');
-    } catch (error) {
-      console.error('Android recording failed:', error);
-      // Fallback to manual frame capture
-      startManualFrameCapture(canvas);
-    }
-  };
-
-  const startManualFrameCapture = (canvas: HTMLCanvasElement) => {
-    // Manual frame capture as fallback
-    console.log('Using manual frame capture fallback');
-    
-    const frames: ImageData[] = [];
-    const frameRate = 30;
-    const captureInterval = 1000 / frameRate;
-    
-    const captureFrame = () => {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        frames.push(imageData);
-      }
-    };
-    
-    const captureIntervalId = setInterval(captureFrame, captureInterval);
-    
-    // Store the interval ID to stop later
-    (window as any).captureIntervalId = captureIntervalId;
-    (window as any).capturedFrames = frames;
-    
-    console.log('Manual frame capture started');
   };
 
   const saveToMobileGallery = (blob: Blob, mimeType: string) => {
@@ -1521,8 +1473,10 @@ export default function MusicVisualizer({
     
     const fileName = `music-visualizer-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
     
+    console.log(`Saving recording: ${fileName}, size: ${blob.size} bytes`);
+    
     // Try Web Share API first (works on most modern mobile browsers)
-    if ('navigator' in window && 'share' in navigator) {
+    if ('navigator' in window && 'share' in navigator && navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: mimeType })] })) {
       const file = new File([blob], fileName, { type: mimeType });
       
       navigator.share({
@@ -1553,12 +1507,6 @@ export default function MusicVisualizer({
       // Android/other mobile browsers
       downloadFile(blob, fileName);
       alert('Recording saved! Check your Downloads folder.');
-    }
-    
-    // Clean up audio destination
-    if (audioDestinationRef.current) {
-      audioDestinationRef.current.disconnect();
-      audioDestinationRef.current = null;
     }
     
     console.log('Mobile recording completed and saved');
@@ -1630,19 +1578,6 @@ export default function MusicVisualizer({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       console.log('Recording stopped - processing video...');
-    } else if ((window as any).captureIntervalId) {
-      // Stop manual frame capture
-      clearInterval((window as any).captureIntervalId);
-      (window as any).captureIntervalId = null;
-      
-      // Process captured frames
-      const frames = (window as any).capturedFrames || [];
-      if (frames.length > 0) {
-        console.log(`Processing ${frames.length} captured frames`);
-        // For now, just show a message since manual frame processing is complex
-        alert('Manual frame capture completed. Full video processing would require additional implementation.');
-      }
-      (window as any).capturedFrames = [];
     } else {
       console.warn('No active recording to stop');
     }

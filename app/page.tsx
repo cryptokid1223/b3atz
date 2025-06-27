@@ -194,7 +194,7 @@ export default function Home() {
       
       if (isMobile) {
         // Mobile-specific feedback
-        alert('Recording started! On mobile, the recording will be saved to your device when you stop. You may need to grant screen recording permissions.');
+        alert('Recording started! The video will be saved to your device when you stop recording. Audio will continue playing normally.');
       }
       
       if (typeof window !== 'undefined' && (window as any).startVisualizerRecording) {
