@@ -63,13 +63,42 @@ export default function Home() {
     }
   }
 
-  const handleYoutubeUrlSubmit = () => {
+  const handleYoutubeUrlSubmit = async () => {
     if (youtubeUrl.trim()) {
       try {
         const url = new URL(youtubeUrl.trim());
         if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
-          // Show instructions for extracting audio URL
-          alert('YouTube video detected! To use this video:\n\n1. Right-click on the video and select "Copy video URL"\n2. Use a YouTube to MP3 converter service\n3. Copy the direct audio URL\n4. Paste it in the "Audio URL" tab\n\nNote: This app cannot directly process YouTube video URLs due to legal restrictions.');
+          // Set loading state
+          setAudioSource('loading');
+          
+          try {
+            // Call our API route
+            const response = await fetch('/api/youtube', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ url: youtubeUrl.trim() })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.audioUrl) {
+              // Set the audio URL directly
+              setAudioSource(data.audioUrl);
+              setYoutubeUrl('');
+            } else {
+              throw new Error(data.error || 'Failed to extract audio');
+            }
+            
+          } catch (error) {
+            console.error('YouTube processing error:', error);
+            
+            // Show the specific error message from the API
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            alert(`YouTube audio extraction failed: ${errorMessage}`);
+            setAudioSource(null);
+          }
         } else {
           alert('Please enter a valid YouTube URL');
         }
@@ -106,16 +135,30 @@ export default function Home() {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
+    if (!isDragging) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     setIsDragging(true)
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
-    setIsDragging(false)
+    e.stopPropagation()
+    // Only set dragging to false if we're leaving the upload area completely
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false)
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     setIsDragging(false)
     
     const files = Array.from(e.dataTransfer.files)
@@ -221,6 +264,7 @@ export default function Home() {
               <div
                 className={`upload-area ${isDragging ? 'dragover' : ''}`}
                 onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => document.getElementById('file-input')?.click()}
@@ -266,11 +310,11 @@ export default function Home() {
 
             {/* YouTube Input Tab */}
             <div className={`youtube-input-container ${activeTab === 'youtube' ? 'active' : ''}`}>
-              <div className="youtube-disclaimer">
-                <div className="disclaimer-icon">⚠️</div>
-                <div className="disclaimer-text">
-                  <strong>Legal Notice:</strong> This app cannot directly process YouTube video URLs due to copyright restrictions. 
-                  You must extract the audio URL yourself using external services.
+              <div className="youtube-info">
+                <div className="youtube-icon">🎵</div>
+                <div className="youtube-text">
+                  <div className="youtube-title">YouTube Audio Extractor</div>
+                  <div className="youtube-subtitle">Paste a YouTube URL to extract and visualize the audio directly. Works with most public YouTube videos.</div>
                 </div>
               </div>
               <div className="youtube-input-wrapper">
@@ -285,24 +329,15 @@ export default function Home() {
                 <button 
                   onClick={handleYoutubeUrlSubmit}
                   className="youtube-submit-btn"
-                  disabled={!youtubeUrl.trim()}
+                  disabled={!youtubeUrl.trim() || audioSource === 'loading'}
                 >
-                  Get Instructions
+                  {audioSource === 'loading' ? 'Extracting...' : 'Extract Audio'}
                 </button>
               </div>
-              <div className="youtube-instructions">
-                <div className="instructions-title">How to use YouTube videos:</div>
-                <div className="instructions-steps">
-                  <div>1. Paste a YouTube URL above and click "Get Instructions"</div>
-                  <div>2. Use a YouTube to MP3 converter service</div>
-                  <div>3. Copy the direct audio URL from the converter</div>
-                  <div>4. Paste the audio URL in the "Audio URL" tab</div>
-                </div>
-                <div className="youtube-examples">
-                  <div>YouTube URL Examples:</div>
-                  <div>• https://www.youtube.com/watch?v=dQw4w9WgXcQ</div>
-                  <div>• https://youtu.be/dQw4w9WgXcQ</div>
-                </div>
+              <div className="youtube-examples">
+                <div>YouTube URL Examples:</div>
+                <div>• https://www.youtube.com/watch?v=dQw4w9WgXcQ</div>
+                <div>• https://youtu.be/dQw4w9WgXcQ</div>
               </div>
             </div>
           </div>
