@@ -194,7 +194,7 @@ export default function Home() {
       
       if (isMobile) {
         // Mobile-specific feedback
-        alert('Recording started! Capturing frames for video creation. Audio will continue playing normally.');
+        alert('Capturing screenshot of current visualization! Audio will continue playing normally.');
       }
       
       if (typeof window !== 'undefined' && (window as any).startVisualizerRecording) {
@@ -208,8 +208,8 @@ export default function Home() {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       if (isMobile) {
-        // Mobile-specific feedback
-        alert('Processing recording... Creating video from captured frames. This may take a moment.');
+        // Mobile-specific feedback - screenshot is already captured
+        console.log('Screenshot already captured');
       }
       
       if (typeof window !== 'undefined' && (window as any).stopVisualizerRecording) {

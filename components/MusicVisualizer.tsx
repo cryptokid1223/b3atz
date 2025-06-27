@@ -1231,8 +1231,8 @@ export default function MusicVisualizer({
     
     try {
       if (isMobile) {
-        // Mobile-specific recording approach - use frame capture
-        startMobileFrameRecording(canvas);
+        // Mobile-specific recording approach - simple screenshot
+        startMobileScreenshotRecording(canvas);
       } else {
         // Desktop recording approach
         startDesktopRecording(canvas);
@@ -1243,43 +1243,45 @@ export default function MusicVisualizer({
     }
   };
 
-  const startMobileFrameRecording = (canvas: HTMLCanvasElement) => {
-    console.log('Starting mobile frame recording...');
+  const startMobileScreenshotRecording = (canvas: HTMLCanvasElement) => {
+    console.log('Starting mobile screenshot recording...');
     
-    // Store frames in memory
-    const frames: string[] = [];
-    let frameCount = 0;
-    const targetFPS = 30;
-    const frameInterval = 1000 / targetFPS;
-    
-    // Function to capture a frame
-    const captureFrame = () => {
-      try {
-        // Convert canvas to blob
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              frames.push(reader.result as string);
-              frameCount++;
-              console.log(`Captured frame ${frameCount}`);
-            };
-            reader.readAsDataURL(blob);
+    // Take a single screenshot and save it
+    try {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const fileName = `music-visualizer-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+          
+          // Try Web Share API first
+          if ('navigator' in window && 'share' in navigator && navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: 'image/png' })] })) {
+            const file = new File([blob], fileName, { type: 'image/png' });
+            
+            navigator.share({
+              title: 'Music Visualizer Screenshot',
+              text: 'Check out this music visualization!',
+              files: [file]
+            }).then(() => {
+              console.log('Screenshot shared successfully');
+              alert('Screenshot shared! You can save it to your device from the share menu.');
+            }).catch((error) => {
+              console.log('Web Share API failed, trying fallback:', error);
+              downloadFile(blob, fileName);
+            });
+          } else {
+            // Fallback to download
+            downloadFile(blob, fileName);
+            alert('Screenshot saved! Check your Downloads folder.');
           }
-        }, 'image/jpeg', 0.8);
-      } catch (error) {
-        console.error('Frame capture error:', error);
-      }
-    };
-    
-    // Start capturing frames
-    const captureInterval = setInterval(captureFrame, frameInterval);
-    
-    // Store the interval ID for stopping
-    (window as any).mobileRecordingInterval = captureInterval;
-    (window as any).mobileRecordingFrames = frames;
-    
-    console.log('Mobile frame recording started successfully');
+        } else {
+          alert('Failed to capture screenshot. Please try again.');
+        }
+      }, 'image/png', 0.9);
+      
+      console.log('Mobile screenshot captured successfully');
+    } catch (error) {
+      console.error('Screenshot capture failed:', error);
+      alert('Failed to capture screenshot. Please try again.');
+    }
   };
 
   const startDesktopRecording = (canvas: HTMLCanvasElement) => {
@@ -1381,75 +1383,9 @@ export default function MusicVisualizer({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       console.log('Desktop recording stopped - processing video...');
-    } else if ((window as any).mobileRecordingInterval) {
-      // Stop mobile frame recording
-      clearInterval((window as any).mobileRecordingInterval);
-      (window as any).mobileRecordingInterval = null;
-      
-      const frames = (window as any).mobileRecordingFrames || [];
-      console.log(`Processing ${frames.length} captured frames`);
-      
-      if (frames.length > 0) {
-        // Convert frames to video using a simple approach
-        createVideoFromFrames(frames);
-      } else {
-        alert('No frames were captured. Please try recording again.');
-      }
-      
-      // Clean up
-      (window as any).mobileRecordingFrames = [];
     } else {
-      console.warn('No active recording to stop');
+      console.log('Mobile screenshot already captured');
     }
-  };
-
-  const createVideoFromFrames = (frames: string[]) => {
-    console.log('Creating video from frames...');
-    
-    // Create a canvas to combine frames
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      alert('Failed to create video - canvas context not available');
-      return;
-    }
-    
-    // Set canvas size (use first frame to determine size)
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      
-      // Create a simple video by combining frames
-      // For now, we'll create a GIF-like animation
-      const frameDelay = 100; // 100ms between frames (10 FPS)
-      let currentFrame = 0;
-      
-      const animate = () => {
-        if (currentFrame < frames.length) {
-          const frameImg = new Image();
-          frameImg.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(frameImg, 0, 0);
-            currentFrame++;
-            setTimeout(animate, frameDelay);
-          };
-          frameImg.src = frames[currentFrame];
-        } else {
-          // Animation complete, save the result
-          canvas.toBlob((blob) => {
-            if (blob) {
-              saveToMobileGallery(blob, 'image/gif');
-            } else {
-              alert('Failed to create video file');
-            }
-          }, 'image/gif');
-        }
-      };
-      
-      animate();
-    };
-    img.src = frames[0];
   };
 
   const saveToMobileGallery = (blob: Blob, mimeType: string) => {
