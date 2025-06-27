@@ -84,6 +84,9 @@ export default function MusicVisualizer({
   // Camera zoom constant
   const INITIAL_CAMERA_Z = 900; // Increase this value to zoom out further
 
+  // Safari audio element ref
+  const safariAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Mobile audio initialization
   const initializeMobileAudio = async () => {
     if (!audioContextRef.current) return;
@@ -98,6 +101,13 @@ export default function MusicVisualizer({
       }
     }
   };
+
+  // Check if we're on mobile Safari
+  const isMobileSafari = typeof window !== 'undefined' && (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) && 
+    /Safari/.test(navigator.userAgent) && 
+    !/Chrome/.test(navigator.userAgent)
+  );
 
   // Check if we're on mobile
   const isMobile = typeof window !== 'undefined' && (
@@ -239,6 +249,14 @@ export default function MusicVisualizer({
         audioContextRef.current.close();
       }
       
+      // For mobile Safari, we'll use a different approach
+      if (isMobileSafari) {
+        console.log('Detected mobile Safari - using HTML5 audio fallback');
+        // We'll handle Safari audio differently in the play/pause logic
+        audioContextRef.current = null;
+        return;
+      }
+      
       // Mobile audio context handling
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioContextClass();
@@ -302,8 +320,16 @@ export default function MusicVisualizer({
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
+      if (safariAudioRef.current) {
+        safariAudioRef.current.pause();
+        safariAudioRef.current.src = '';
+        if (typeof audioSource === 'object' && audioSource instanceof File) {
+          URL.revokeObjectURL(safariAudioRef.current.src);
+        }
+        safariAudioRef.current = null;
+      }
     };
-  }, [audioSource, onDuration]);
+  }, [audioSource, onDuration, isMobileSafari]);
 
   // Animation loop
   useEffect(() => {
@@ -880,6 +906,17 @@ export default function MusicVisualizer({
 
   // Handle seekValue prop: seek audio when changed
   useEffect(() => {
+    if (isMobileSafari) {
+      // Safari seek handling
+      if (safariAudioRef.current && Math.abs(seekValue - lastSeekRef.current) >= 0.1) {
+        safariAudioRef.current.currentTime = seekValue;
+        lastSeekRef.current = seekValue;
+        onTimeUpdate(seekValue);
+        console.log('Safari audio seeked to:', seekValue);
+      }
+      return;
+    }
+    
     if (!audioBufferRef.current || !audioContextRef.current) return;
     if (Math.abs(seekValue - lastSeekRef.current) < 0.1) return; // Avoid tiny changes
     
@@ -933,14 +970,74 @@ export default function MusicVisualizer({
     startTimeRef.current = audioContextRef.current.currentTime;
     source.start(0, seekValue);
     source.onended = () => setIsPlaying(false);
-  }, [seekValue, isPlaying, onTimeUpdate]);
+  }, [seekValue, isPlaying, onTimeUpdate, isMobileSafari]);
 
   // When play/pause changes, start/stop audio at correct position
   useEffect(() => {
-    if (!audioBufferRef.current || !audioContextRef.current) return;
+    if (!audioBufferRef.current && !isMobileSafari) return;
     
     if (isPlaying) {
-      // For mobile devices, resume the audio context if it's suspended
+      // Safari-specific audio handling
+      if (isMobileSafari) {
+        console.log('Starting Safari audio playback');
+        
+        // Create audio element if it doesn't exist
+        if (!safariAudioRef.current) {
+          const audio = new Audio();
+          
+          if (typeof audioSource === 'string') {
+            audio.src = audioSource;
+          } else {
+            // Create object URL for file
+            const objectUrl = URL.createObjectURL(audioSource);
+            audio.src = objectUrl;
+          }
+          
+          audio.preload = 'metadata';
+          audio.crossOrigin = 'anonymous';
+          
+          // Set up audio analysis for Safari
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const source = audioContext.createMediaElementSource(audio);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          analyserRef.current = analyser;
+          
+          source.connect(analyser);
+          analyser.connect(audioContext.destination);
+          
+          // Set up time tracking
+          audio.addEventListener('timeupdate', () => {
+            onTimeUpdate(audio.currentTime);
+          });
+          
+          audio.addEventListener('loadedmetadata', () => {
+            onDuration(audio.duration);
+            console.log('Safari audio loaded, duration:', audio.duration);
+          });
+          
+          audio.addEventListener('ended', () => {
+            setIsPlaying(false);
+          });
+          
+          safariAudioRef.current = audio;
+        }
+        
+        // Start playback
+        const audio = safariAudioRef.current;
+        if (audio) {
+          audio.currentTime = pausedAtRef.current || lastSeekRef.current || 0;
+          audio.play().then(() => {
+            console.log('Safari audio playback started successfully');
+          }).catch(error => {
+            console.error('Failed to start Safari audio playback:', error);
+            setIsPlaying(false);
+          });
+        }
+        return;
+      }
+      
+      // Regular Web Audio API handling for non-Safari
       const startAudioPlayback = async () => {
         const audioContext = audioContextRef.current;
         if (!audioContext) return;
@@ -1011,8 +1108,15 @@ export default function MusicVisualizer({
       
       startAudioPlayback();
     } else {
-      // Pause: record where we stopped and stop the source
-      if (sourceRef.current && audioContextRef.current) {
+      // Pause logic
+      if (isMobileSafari && safariAudioRef.current) {
+        // Safari pause
+        const audio = safariAudioRef.current;
+        pausedAtRef.current = audio.currentTime;
+        audio.pause();
+        console.log('Safari audio paused at:', audio.currentTime);
+      } else if (sourceRef.current && audioContextRef.current) {
+        // Regular Web Audio API pause
         const now = audioContextRef.current.currentTime;
         pausedAtRef.current = now - startTimeRef.current + lastSeekRef.current;
         try { sourceRef.current.stop(); } catch (e) {}
@@ -1020,7 +1124,7 @@ export default function MusicVisualizer({
         sourceRef.current = null;
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, isMobileSafari, audioSource, onTimeUpdate, onDuration]);
 
   // Advanced beat detection and energy analysis
   function detectBeat(freqData: Uint8Array, currentTime: number): { isBeat: boolean, beatStrength: number, energy: number } {
