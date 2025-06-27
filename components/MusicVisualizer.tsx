@@ -84,6 +84,21 @@ export default function MusicVisualizer({
   // Camera zoom constant
   const INITIAL_CAMERA_Z = 900; // Increase this value to zoom out further
 
+  // Mobile audio initialization
+  const initializeMobileAudio = async () => {
+    if (!audioContextRef.current) return;
+    
+    // For mobile devices, we need to resume the context
+    if (audioContextRef.current.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume();
+        console.log('Mobile audio context resumed successfully');
+      } catch (error) {
+        console.error('Failed to resume mobile audio context:', error);
+      }
+    }
+  };
+
   // Setup Three.js scene
   useEffect(() => {
     if (visualStyle === 'ascii') return; // Don't setup Three.js for ASCII
@@ -217,7 +232,17 @@ export default function MusicVisualizer({
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Mobile audio context handling
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      
+      // For mobile devices, we need to resume the context on user interaction
+      if (audioContext.state === 'suspended') {
+        console.log('Audio context suspended, waiting for user interaction...');
+        // We'll resume it when the user tries to play
+      }
+      
       audioContextRef.current = audioContext;
       
       try {
@@ -897,6 +922,16 @@ export default function MusicVisualizer({
     if (!audioBufferRef.current || !audioContextRef.current) return;
     
     if (isPlaying) {
+      // For mobile devices, resume the audio context if it's suspended
+      if (audioContextRef.current.state === 'suspended') {
+        console.log('Resuming audio context for mobile...');
+        audioContextRef.current.resume().then(() => {
+          console.log('Audio context resumed successfully');
+        }).catch(error => {
+          console.error('Failed to resume audio context:', error);
+        });
+      }
+      
       // Always stop any existing source first
       if (sourceRef.current) {
         try { sourceRef.current.stop(); } catch (e) {}
@@ -1233,12 +1268,11 @@ export default function MusicVisualizer({
   }, [visualStyle]);
 
   return (
-    <div key={visualStyle} style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0, zIndex: 1 }}>
-      <div
-        key={`threejs-${visualStyle}`}
-        ref={mountRef}
-        style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0, zIndex: 1 }}
-      />
-    </div>
+    <div 
+      ref={mountRef} 
+      style={{ width: '100%', height: '100%' }}
+      onClick={initializeMobileAudio}
+      onTouchStart={initializeMobileAudio}
+    />
   );
 } 

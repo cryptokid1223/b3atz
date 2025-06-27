@@ -407,32 +407,29 @@ body {
   }
   
   input[type="range"] {
-    height: 20px;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    cursor: pointer;
+    height: 24px;
+  }
+  
+  input[type="range"]::-webkit-slider-track {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.3);
   }
   
   input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    height: 20px;
-    width: 20px;
-    border-radius: 50%;
-    background: #fff;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    height: 24px;
+    width: 24px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+  }
+  
+  input[type="range"]::-moz-range-track {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.3);
   }
   
   input[type="range"]::-moz-range-thumb {
-    height: 20px;
-    width: 20px;
-    border-radius: 50%;
-    background: #fff;
-    cursor: pointer;
-    border: none;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    height: 24px;
+    width: 24px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.4);
   }
   
   input[type="file"] {
@@ -636,4 +633,80 @@ input, textarea, select {
   border-radius: 10px;
   padding: 15px;
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+input[type="range"] {
+  height: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  border: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  border: 2px solid #00ff88;
+}
+
+input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  border: none;
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  border: 2px solid #00ff88;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Mobile-specific range input styling */
+@media (max-width: 768px) {
+  input[type="range"] {
+    height: 24px;
+  }
+  
+  input[type="range"]::-webkit-slider-track {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  input[type="range"]::-webkit-slider-thumb {
+    height: 24px;
+    width: 24px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+  }
+  
+  input[type="range"]::-moz-range-track {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  input[type="range"]::-moz-range-thumb {
+    height: 24px;
+    width: 24px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+  }
 } 
