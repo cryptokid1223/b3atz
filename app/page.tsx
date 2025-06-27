@@ -152,7 +152,7 @@ export default function Home() {
     e.stopPropagation()
     // Only set dragging to false if we're leaving the upload area completely
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDragging(false)
+    setIsDragging(false)
     }
   }
 
@@ -188,12 +188,30 @@ export default function Home() {
     if (!isRecording) {
       // Start recording
       setIsRecording(true);
+      
+      // Check if we're on mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Mobile-specific feedback
+        alert('Recording started! On mobile, the recording will be saved to your device when you stop. You may need to grant screen recording permissions.');
+      }
+      
       if (typeof window !== 'undefined' && (window as any).startVisualizerRecording) {
         (window as any).startVisualizerRecording();
       }
     } else {
       // Stop recording
       setIsRecording(false);
+      
+      // Check if we're on mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Mobile-specific feedback
+        alert('Processing recording... Please wait while the video is being saved to your device.');
+      }
+      
       if (typeof window !== 'undefined' && (window as any).stopVisualizerRecording) {
         (window as any).stopVisualizerRecording();
       }

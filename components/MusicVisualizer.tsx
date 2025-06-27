@@ -1253,61 +1253,217 @@ export default function MusicVisualizer({
     const canvas = rendererRef.current.domElement;
     canvasRef.current = canvas;
     
+    // Detect if we're on mobile
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
     try {
-      // Capture video stream from canvas
-      const videoStream = canvas.captureStream(60); // 60 FPS
+      if (isMobile) {
+        // Mobile-specific recording approach
+        startMobileRecording(canvas);
+      } else {
+        // Desktop recording approach
+        startDesktopRecording(canvas);
+      }
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      alert('Failed to start recording. Please check browser permissions and try again.');
+    }
+  };
+
+  const startDesktopRecording = (canvas: HTMLCanvasElement) => {
+    // Capture video stream from canvas
+    const videoStream = canvas.captureStream(60); // 60 FPS
+    
+    // Create audio destination for recording
+    const audioDestination = audioContextRef.current!.createMediaStreamDestination();
+    audioDestinationRef.current = audioDestination;
+    
+    // Create a splitter to route audio to both playback and recording
+    if (sourceRef.current) {
+      // Create a gain node to split the audio
+      const splitter = audioContextRef.current!.createGain();
       
-      // Create audio destination for recording
-      const audioDestination = audioContextRef.current.createMediaStreamDestination();
+      // Disconnect current connections
+      sourceRef.current.disconnect();
+      
+      // Connect source to splitter
+      sourceRef.current.connect(splitter);
+      
+      // Connect splitter to both destinations
+      splitter.connect(audioDestination); // For recording
+      
+      // Recreate analyser and connect to playback
+      const analyser = audioContextRef.current!.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
+      splitter.connect(analyser);
+      analyser.connect(audioContextRef.current!.destination);
+    }
+    
+    // Combine video and audio streams
+    const combinedStream = new MediaStream([
+      ...videoStream.getVideoTracks(),
+      ...audioDestination.stream.getAudioTracks()
+    ]);
+    
+    // Check for supported MIME types
+    const mimeTypes = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp9',
+      'video/webm'
+    ];
+    
+    let selectedMimeType = 'video/webm';
+    for (const mimeType of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        selectedMimeType = mimeType;
+        break;
+      }
+    }
+    
+    const mediaRecorder = new MediaRecorder(combinedStream, {
+      mimeType: selectedMimeType,
+      videoBitsPerSecond: 8000000 // 8 Mbps for high quality
+    });
+    
+    mediaRecorderRef.current = mediaRecorder;
+    recordedChunksRef.current = [];
+    
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+    
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `music-visualizer-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      // Clean up audio destination
+      if (audioDestinationRef.current) {
+        audioDestinationRef.current.disconnect();
+        audioDestinationRef.current = null;
+      }
+      
+      console.log('Recording completed and downloaded');
+    };
+    
+    mediaRecorder.onerror = (event) => {
+      console.error('MediaRecorder error:', event);
+      alert('Recording failed. Please try again.');
+    };
+    
+    mediaRecorder.start();
+    console.log('Desktop recording started with audio and video');
+  };
+
+  const startMobileRecording = async (canvas: HTMLCanvasElement) => {
+    // For mobile, we'll use a different approach that's more compatible
+    // We'll capture frames and audio separately, then combine them
+    
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+    
+    console.log(`Mobile recording: iOS=${isIOS}, Safari=${isSafari}`);
+    
+    try {
+      if (isIOS && isSafari) {
+        // iOS Safari specific approach
+        await startIOSRecording(canvas);
+      } else {
+        // Android/other mobile browsers
+        await startAndroidRecording(canvas);
+      }
+    } catch (error) {
+      console.error('Mobile recording failed:', error);
+      alert('Mobile recording failed. Trying fallback method...');
+      // Fallback to manual frame capture
+      startManualFrameCapture(canvas);
+    }
+  };
+
+  const startIOSRecording = async (canvas: HTMLCanvasElement) => {
+    try {
+      // For iOS Safari, we'll use a simpler approach with screen recording API if available
+      if ('mediaDevices' in navigator && 'getDisplayMedia' in navigator.mediaDevices) {
+        // Try to use screen recording API
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: canvas.width },
+            height: { ideal: canvas.height }
+          },
+          audio: true
+        });
+        
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'video/mp4'
+        });
+        
+        mediaRecorderRef.current = mediaRecorder;
+        recordedChunksRef.current = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunksRef.current.push(event.data);
+          }
+        };
+        
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunksRef.current, { type: 'video/mp4' });
+          saveToMobileGallery(blob, 'video/mp4');
+        };
+        
+        mediaRecorder.start();
+        console.log('iOS screen recording started');
+      } else {
+        // Fallback: manual frame capture
+        startManualFrameCapture(canvas);
+      }
+    } catch (error) {
+      console.error('iOS recording failed:', error);
+      // Fallback to manual frame capture
+      startManualFrameCapture(canvas);
+    }
+  };
+
+  const startAndroidRecording = async (canvas: HTMLCanvasElement) => {
+    try {
+      // For Android, try canvas capture stream first
+      const videoStream = canvas.captureStream(30); // Lower FPS for mobile
+      
+      // Create audio destination
+      const audioDestination = audioContextRef.current!.createMediaStreamDestination();
       audioDestinationRef.current = audioDestination;
       
-      // Create a splitter to route audio to both playback and recording
+      // Connect audio if available
       if (sourceRef.current) {
-        // Create a gain node to split the audio
-        const splitter = audioContextRef.current.createGain();
-        
-        // Disconnect current connections
+        const splitter = audioContextRef.current!.createGain();
         sourceRef.current.disconnect();
-        
-        // Connect source to splitter
         sourceRef.current.connect(splitter);
+        splitter.connect(audioDestination);
         
-        // Connect splitter to both destinations
-        splitter.connect(audioDestination); // For recording
-        
-        // Recreate analyser and connect to playback
-        const analyser = audioContextRef.current.createAnalyser();
+        const analyser = audioContextRef.current!.createAnalyser();
         analyser.fftSize = 256;
         analyserRef.current = analyser;
         splitter.connect(analyser);
-        analyser.connect(audioContextRef.current.destination);
+        analyser.connect(audioContextRef.current!.destination);
       }
       
-      // Combine video and audio streams
       const combinedStream = new MediaStream([
         ...videoStream.getVideoTracks(),
         ...audioDestination.stream.getAudioTracks()
       ]);
       
-      // Check for supported MIME types
-      const mimeTypes = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm;codecs=vp9',
-        'video/webm'
-      ];
-      
-      let selectedMimeType = 'video/webm';
-      for (const mimeType of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          selectedMimeType = mimeType;
-          break;
-        }
-      }
-      
       const mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: selectedMimeType,
-        videoBitsPerSecond: 8000000 // 8 Mbps for high quality
+        mimeType: 'video/webm'
       });
       
       mediaRecorderRef.current = mediaRecorder;
@@ -1321,46 +1477,105 @@ export default function MusicVisualizer({
       
       mediaRecorder.onstop = () => {
         const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `music-visualizer-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        // Clean up audio destination
-        if (audioDestinationRef.current) {
-          audioDestinationRef.current.disconnect();
-          audioDestinationRef.current = null;
-        }
-        
-        console.log('Recording completed and downloaded');
-      };
-      
-      mediaRecorder.onerror = (event) => {
-        console.error('MediaRecorder error:', event);
-        alert('Recording failed. Please try again.');
+        saveToMobileGallery(blob, 'video/webm');
       };
       
       mediaRecorder.start();
-      console.log('Recording started with audio and video');
+      console.log('Android recording started');
     } catch (error) {
-      console.error('Failed to start recording:', error);
-      alert('Failed to start recording. Please check browser permissions and try again.');
+      console.error('Android recording failed:', error);
+      // Fallback to manual frame capture
+      startManualFrameCapture(canvas);
     }
   };
-  
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      console.log('Recording stopped - processing video...');
+
+  const startManualFrameCapture = (canvas: HTMLCanvasElement) => {
+    // Manual frame capture as fallback
+    console.log('Using manual frame capture fallback');
+    
+    const frames: ImageData[] = [];
+    const frameRate = 30;
+    const captureInterval = 1000 / frameRate;
+    
+    const captureFrame = () => {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        frames.push(imageData);
+      }
+    };
+    
+    const captureIntervalId = setInterval(captureFrame, captureInterval);
+    
+    // Store the interval ID to stop later
+    (window as any).captureIntervalId = captureIntervalId;
+    (window as any).capturedFrames = frames;
+    
+    console.log('Manual frame capture started');
+  };
+
+  const saveToMobileGallery = (blob: Blob, mimeType: string) => {
+    // Try to save to mobile gallery using various methods
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+    
+    const fileName = `music-visualizer-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+    
+    // Try Web Share API first (works on most modern mobile browsers)
+    if ('navigator' in window && 'share' in navigator) {
+      const file = new File([blob], fileName, { type: mimeType });
+      
+      navigator.share({
+        title: 'Music Visualizer Recording',
+        text: 'Check out this music visualization recording!',
+        files: [file]
+      }).then(() => {
+        console.log('Recording shared successfully');
+        alert('Recording shared! You can save it to your device from the share menu.');
+      }).catch((error) => {
+        console.log('Web Share API failed, trying fallback:', error);
+        // Fallback to download
+        downloadFile(blob, fileName);
+      });
+    } else if (isIOS && isSafari) {
+      // iOS Safari specific handling
+      if ('webkit' in window && 'messageHandlers' in (window as any).webkit) {
+        // iOS WebView with native bridge
+        const url = URL.createObjectURL(blob);
+        (window as any).webkit.messageHandlers.saveToPhotos.postMessage(url);
+        alert('Recording saved to Photos!');
+      } else {
+        // iOS Safari fallback
+        downloadFile(blob, fileName);
+        alert('Recording saved! Check your Downloads folder or Photos app.');
+      }
     } else {
-      console.warn('No active recording to stop');
+      // Android/other mobile browsers
+      downloadFile(blob, fileName);
+      alert('Recording saved! Check your Downloads folder.');
     }
+    
+    // Clean up audio destination
+    if (audioDestinationRef.current) {
+      audioDestinationRef.current.disconnect();
+      audioDestinationRef.current = null;
+    }
+    
+    console.log('Mobile recording completed and saved');
   };
-  
+
+  const downloadFile = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Expose recording functions to parent component
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1410,6 +1625,28 @@ export default function MusicVisualizer({
     }
     // Only run when visualStyle changes
   }, [visualStyle]);
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      console.log('Recording stopped - processing video...');
+    } else if ((window as any).captureIntervalId) {
+      // Stop manual frame capture
+      clearInterval((window as any).captureIntervalId);
+      (window as any).captureIntervalId = null;
+      
+      // Process captured frames
+      const frames = (window as any).capturedFrames || [];
+      if (frames.length > 0) {
+        console.log(`Processing ${frames.length} captured frames`);
+        // For now, just show a message since manual frame processing is complex
+        alert('Manual frame capture completed. Full video processing would require additional implementation.');
+      }
+      (window as any).capturedFrames = [];
+    } else {
+      console.warn('No active recording to stop');
+    }
+  };
 
   return (
     <div 
