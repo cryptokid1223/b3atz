@@ -1,0 +1,33 @@
+{
+  "name": "music-visualizer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@p5-wrapper/react": "^4.4.2",
+    "ccapture.js": "^1.1.0",
+    "next": "14.0.4",
+    "p5": "^1.11.8",
+    "react": "^18",
+    "react-dom": "^18",
+    "three": "^0.155.0",
+    "three-stdlib": "^2.36.0",
+    "tone": "^14.7.77",
+    "web-vitals": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/p5": "^1.7.6",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/three": "^0.177.0",
+    "eslint": "^8",
+    "eslint-config-next": "14.0.4",
+    "typescript": "^5"
+  }
+}
