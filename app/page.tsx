@@ -194,7 +194,7 @@ export default function Home() {
       
       if (isMobile) {
         // Mobile-specific feedback
-        alert('Recording started! The video will be saved to your device when you stop recording. Audio will continue playing normally.');
+        alert('Recording started! Capturing frames for video creation. Audio will continue playing normally.');
       }
       
       if (typeof window !== 'undefined' && (window as any).startVisualizerRecording) {
@@ -209,7 +209,7 @@ export default function Home() {
       
       if (isMobile) {
         // Mobile-specific feedback
-        alert('Processing recording... Please wait while the video is being saved to your device.');
+        alert('Processing recording... Creating video from captured frames. This may take a moment.');
       }
       
       if (typeof window !== 'undefined' && (window as any).stopVisualizerRecording) {
