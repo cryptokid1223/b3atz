@@ -28,7 +28,8 @@ function formatTime(seconds: number) {
 export default function Home() {
   const [audioSource, setAudioSource] = useState<File | string | null>(null)
   const [audioUrl, setAudioUrl] = useState('')
-  const [activeTab, setActiveTab] = useState<'file' | 'url'>('file')
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [activeTab, setActiveTab] = useState<'file' | 'url' | 'youtube'>('file')
   const [isDragging, setIsDragging] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -62,9 +63,29 @@ export default function Home() {
     }
   }
 
+  const handleYoutubeUrlSubmit = () => {
+    if (youtubeUrl.trim()) {
+      try {
+        const url = new URL(youtubeUrl.trim());
+        if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
+          // Show instructions for extracting audio URL
+          alert('YouTube video detected! To use this video:\n\n1. Right-click on the video and select "Copy video URL"\n2. Use a YouTube to MP3 converter service\n3. Copy the direct audio URL\n4. Paste it in the "Audio URL" tab\n\nNote: This app cannot directly process YouTube video URLs due to legal restrictions.');
+        } else {
+          alert('Please enter a valid YouTube URL');
+        }
+      } catch (error) {
+        alert('Please enter a valid URL');
+      }
+    }
+  }
+
   const handleUrlKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleUrlSubmit()
+      if (activeTab === 'url') {
+        handleUrlSubmit()
+      } else if (activeTab === 'youtube') {
+        handleYoutubeUrlSubmit()
+      }
     }
   }
 
@@ -139,6 +160,7 @@ export default function Home() {
   const resetVisualizer = () => {
     setAudioSource(null)
     setAudioUrl('')
+    setYoutubeUrl('')
     setActiveTab('file')
     setIsPlaying(false)
     setIsRecording(false)
@@ -185,6 +207,12 @@ export default function Home() {
                 onClick={() => setActiveTab('url')}
               >
                 Audio URL
+              </div>
+              <div 
+                className={`upload-tab ${activeTab === 'youtube' ? 'active' : ''}`}
+                onClick={() => setActiveTab('youtube')}
+              >
+                YouTube
               </div>
             </div>
             
@@ -233,6 +261,48 @@ export default function Home() {
                 <div>Examples:</div>
                 <div>• https://example.com/song.mp3</div>
                 <div>• https://cdn.example.com/audio.wav</div>
+              </div>
+            </div>
+
+            {/* YouTube Input Tab */}
+            <div className={`youtube-input-container ${activeTab === 'youtube' ? 'active' : ''}`}>
+              <div className="youtube-disclaimer">
+                <div className="disclaimer-icon">⚠️</div>
+                <div className="disclaimer-text">
+                  <strong>Legal Notice:</strong> This app cannot directly process YouTube video URLs due to copyright restrictions. 
+                  You must extract the audio URL yourself using external services.
+                </div>
+              </div>
+              <div className="youtube-input-wrapper">
+                <input
+                  type="url"
+                  placeholder="Enter YouTube video URL"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  onKeyPress={handleUrlKeyPress}
+                  className="youtube-input"
+                />
+                <button 
+                  onClick={handleYoutubeUrlSubmit}
+                  className="youtube-submit-btn"
+                  disabled={!youtubeUrl.trim()}
+                >
+                  Get Instructions
+                </button>
+              </div>
+              <div className="youtube-instructions">
+                <div className="instructions-title">How to use YouTube videos:</div>
+                <div className="instructions-steps">
+                  <div>1. Paste a YouTube URL above and click "Get Instructions"</div>
+                  <div>2. Use a YouTube to MP3 converter service</div>
+                  <div>3. Copy the direct audio URL from the converter</div>
+                  <div>4. Paste the audio URL in the "Audio URL" tab</div>
+                </div>
+                <div className="youtube-examples">
+                  <div>YouTube URL Examples:</div>
+                  <div>• https://www.youtube.com/watch?v=dQw4w9WgXcQ</div>
+                  <div>• https://youtu.be/dQw4w9WgXcQ</div>
+                </div>
               </div>
             </div>
           </div>

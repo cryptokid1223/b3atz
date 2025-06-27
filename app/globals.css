@@ -447,6 +447,58 @@ body {
     height: 100%;
     overflow: hidden;
   }
+  
+  .youtube-input-container {
+    padding: 20px;
+  }
+  
+  .youtube-disclaimer {
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+  
+  .disclaimer-text {
+    font-size: 12px;
+  }
+  
+  .youtube-input-wrapper {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .youtube-submit-btn {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  
+  .youtube-instructions {
+    padding: 15px;
+  }
+  
+  .instructions-title {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  
+  .instructions-steps {
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  
+  .instructions-steps div {
+    margin-bottom: 6px;
+    padding-left: 8px;
+  }
+  
+  .youtube-examples {
+    font-size: 11px;
+    padding-top: 12px;
+  }
+  
+  .url-input-wrapper {
+    flex-direction: column;
+    gap: 15px;
+  }
 }
 
 /* Extra small mobile devices */
@@ -530,4 +582,125 @@ input, textarea, select {
 /* Prevent zoom on double tap */
 * {
   touch-action: manipulation;
+}
+
+.youtube-input-container {
+  padding: 30px;
+  display: none;
+}
+
+.youtube-input-container.active {
+  display: block;
+}
+
+.youtube-disclaimer {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.disclaimer-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.disclaimer-text {
+  color: #ffc107;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.disclaimer-text strong {
+  color: #ff9800;
+}
+
+.youtube-input-wrapper {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.youtube-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.youtube-input:focus {
+  border-color: #ff9800;
+  box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.2);
+}
+
+.youtube-input::placeholder {
+  color: #888;
+}
+
+.youtube-submit-btn {
+  padding: 12px 20px;
+  background: #ff9800;
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.youtube-submit-btn:hover:not(:disabled) {
+  background: #f57c00;
+  transform: translateY(-1px);
+}
+
+.youtube-submit-btn:disabled {
+  background: #444;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.youtube-instructions {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.instructions-title {
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
+.instructions-steps {
+  color: #ccc;
+  font-size: 13px;
+  line-height: 1.8;
+  margin-bottom: 15px;
+}
+
+.instructions-steps div {
+  margin-bottom: 8px;
+  padding-left: 10px;
+  border-left: 2px solid #ff9800;
+}
+
+.youtube-examples {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.6;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 15px;
 } 
