@@ -45,6 +45,20 @@ export default function Home() {
   const [audioDuration, setAudioDuration] = useState(0)
   const [seekValue, setSeekValue] = useState(0)
   const seekRef = useRef<HTMLInputElement>(null)
+  const [isMobile, setIsMobile] = useState(false)
+
+  // Detect mobile on component mount
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+      setIsMobile(mobile);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleFileUpload = (file: File) => {
     if (file.type.startsWith('audio/')) {
@@ -427,13 +441,15 @@ export default function Home() {
             >
               {isFullscreen ? '⏹️ Exit' : '⛶ Full'}
             </button>
-            <button
-              className={`control-button ${isRecording ? 'recording' : ''}`}
-              onClick={toggleRecording}
-              style={{ minWidth: window.innerWidth <= 768 ? '60px' : 'auto' }}
-            >
-              {isRecording ? '⏺️ Stop' : '🎥 Record'}
-            </button>
+            {!isMobile && (
+              <button
+                className={`control-button ${isRecording ? 'recording' : ''}`}
+                onClick={toggleRecording}
+                style={{ minWidth: window.innerWidth <= 768 ? '60px' : 'auto' }}
+              >
+                {isRecording ? '⏺️ Stop' : '🎥 Record'}
+              </button>
+            )}
             <button
               className="control-button"
               onClick={resetVisualizer}
