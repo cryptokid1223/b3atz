@@ -99,6 +99,12 @@ export default function MusicVisualizer({
     }
   };
 
+  // Check if we're on mobile
+  const isMobile = typeof window !== 'undefined' && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    window.innerWidth <= 768
+  );
+
   // Setup Three.js scene
   useEffect(() => {
     if (visualStyle === 'ascii') return; // Don't setup Three.js for ASCII
@@ -109,7 +115,7 @@ export default function MusicVisualizer({
     }
     
     // Mobile detection
-    const isMobile = window.innerWidth <= 768;
+    const isMobileNow = window.innerWidth <= 768;
     
     const renderer = new THREE.WebGLRenderer({ 
       antialias: !isMobile, // Disable antialiasing on mobile for better performance
@@ -258,25 +264,31 @@ export default function MusicVisualizer({
           arrayBuffer = await response.arrayBuffer();
         } else {
           // Handle File - use FileReader
+          console.log('Loading audio file:', audioSource.name, 'Size:', audioSource.size);
           arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
               if (e.target?.result instanceof ArrayBuffer) {
+                console.log('File read successfully, size:', e.target.result.byteLength);
                 resolve(e.target.result);
               } else {
                 reject(new Error('Failed to read file'));
               }
             };
-            reader.onerror = () => reject(new Error('File read error'));
+            reader.onerror = (e) => {
+              console.error('FileReader error:', e);
+              reject(new Error('File read error'));
+            };
             reader.readAsArrayBuffer(audioSource);
           });
         }
         
+        console.log('Decoding audio data...');
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         audioBufferRef.current = audioBuffer;
         // Set duration when loaded
         onDuration(audioBuffer.duration);
-        console.log('Audio loaded successfully, duration:', audioBuffer.duration);
+        console.log('Audio loaded successfully, duration:', audioBuffer.duration, 'channels:', audioBuffer.numberOfChannels, 'sample rate:', audioBuffer.sampleRate);
       } catch (error) {
         console.error('Failed to load audio:', error);
         alert(`Failed to load audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -907,7 +919,13 @@ export default function MusicVisualizer({
       const analyser = audioContextRef.current.createAnalyser();
       analyser.fftSize = 256;
       analyserRef.current = analyser;
-      source.connect(analyser);
+      
+      // Add a gain node for volume control (especially important for mobile)
+      const gainNode = audioContextRef.current.createGain();
+      gainNode.gain.value = 1.0; // Full volume
+      
+      source.connect(gainNode);
+      gainNode.connect(analyser);
       analyser.connect(audioContextRef.current.destination);
     }
     
@@ -923,53 +941,75 @@ export default function MusicVisualizer({
     
     if (isPlaying) {
       // For mobile devices, resume the audio context if it's suspended
-      if (audioContextRef.current.state === 'suspended') {
-        console.log('Resuming audio context for mobile...');
-        audioContextRef.current.resume().then(() => {
-          console.log('Audio context resumed successfully');
-        }).catch(error => {
-          console.error('Failed to resume audio context:', error);
-        });
-      }
-      
-      // Always stop any existing source first
-      if (sourceRef.current) {
-        try { sourceRef.current.stop(); } catch (e) {}
-        sourceRef.current.disconnect();
-        sourceRef.current = null;
-      }
-      
-      // Start from pausedAtRef or lastSeekRef
-      const startAt = pausedAtRef.current || lastSeekRef.current || 0;
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBufferRef.current;
-      
-      // Check if we're recording and need to use splitter
-      if (audioDestinationRef.current) {
-        // Use splitter pattern for recording
-        const splitter = audioContextRef.current.createGain();
-        source.connect(splitter);
-        splitter.connect(audioDestinationRef.current);
+      const startAudioPlayback = async () => {
+        const audioContext = audioContextRef.current;
+        if (!audioContext) return;
         
-        const analyser = audioContextRef.current.createAnalyser();
-        analyser.fftSize = 256;
-        analyserRef.current = analyser;
-        splitter.connect(analyser);
-        analyser.connect(audioContextRef.current.destination);
-      } else {
-        // Normal playback without recording
-        const analyser = audioContextRef.current.createAnalyser();
-        analyser.fftSize = 256;
-        analyserRef.current = analyser;
-        source.connect(analyser);
-        analyser.connect(audioContextRef.current.destination);
-      }
+        if (audioContext.state === 'suspended') {
+          console.log('Resuming audio context for mobile...');
+          try {
+            await audioContext.resume();
+            console.log('Audio context resumed successfully');
+          } catch (error) {
+            console.error('Failed to resume audio context:', error);
+            return; // Don't start playback if resume failed
+          }
+        }
+        
+        // Always stop any existing source first
+        if (sourceRef.current) {
+          try { sourceRef.current.stop(); } catch (e) {}
+          sourceRef.current.disconnect();
+          sourceRef.current = null;
+        }
+        
+        // Start from pausedAtRef or lastSeekRef
+        const startAt = pausedAtRef.current || lastSeekRef.current || 0;
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBufferRef.current;
+        
+        // Check if we're recording and need to use splitter
+        if (audioDestinationRef.current) {
+          // Use splitter pattern for recording
+          const splitter = audioContext.createGain();
+          source.connect(splitter);
+          splitter.connect(audioDestinationRef.current);
+          
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          analyserRef.current = analyser;
+          splitter.connect(analyser);
+          analyser.connect(audioContext.destination);
+        } else {
+          // Normal playback without recording
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          analyserRef.current = analyser;
+          
+          // Add a gain node for volume control (especially important for mobile)
+          const gainNode = audioContext.createGain();
+          gainNode.gain.value = 1.0; // Full volume
+          
+          source.connect(gainNode);
+          gainNode.connect(analyser);
+          analyser.connect(audioContext.destination);
+        }
+        
+        sourceRef.current = source;
+        startTimeRef.current = audioContext.currentTime;
+        lastSeekRef.current = startAt;
+        
+        try {
+          source.start(0, startAt);
+          source.onended = () => setIsPlaying(false);
+          console.log('Audio playback started successfully');
+        } catch (error) {
+          console.error('Failed to start audio playback:', error);
+          setIsPlaying(false);
+        }
+      };
       
-      sourceRef.current = source;
-      startTimeRef.current = audioContextRef.current.currentTime;
-      lastSeekRef.current = startAt;
-      source.start(0, startAt);
-      source.onended = () => setIsPlaying(false);
+      startAudioPlayback();
     } else {
       // Pause: record where we stopped and stop the source
       if (sourceRef.current && audioContextRef.current) {
